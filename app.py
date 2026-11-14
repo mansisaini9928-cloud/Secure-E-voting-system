@@ -1,13 +1,18 @@
+
 import hashlib
 import secrets
 import uuid
+import os
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask, abort, flash, jsonify, redirect, render_template,
+    request, session, url_for
+)
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -46,7 +51,7 @@ def _chain_state(db):
 
 
 def _create_blueprints(app):
-    """Member integration points. Member 1/2/3 implementations can replace these modules."""
+    """Member integration points."""
 
     from members.member1_auth import bp as member1_bp
     from members.member2_crypto import bp as member2_bp
@@ -75,6 +80,47 @@ def create_app(test_config=None):
 
     csrf.init_app(app)
     init_db_app(app)
+
+    # Member 1: Create initial admin account
+    with app.app_context():
+
+        admin_username = os.environ.get("ADMIN_USERNAME")
+        admin_email = os.environ.get("ADMIN_EMAIL")
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+
+        if admin_username and admin_email and admin_password:
+
+            db = get_db()
+
+            existing_admin = db.execute(
+                "SELECT id, role FROM users WHERE username=? OR email=?",
+                (admin_username, admin_email)
+            ).fetchone()
+
+            if existing_admin is None:
+
+                db.execute(
+                    """
+                    INSERT INTO users
+                    (username, email, password_hash, role, eligible)
+                    VALUES (?, ?, ?, 'admin', 1)
+                    """,
+                    (
+                        admin_username,
+                        admin_email,
+                        generate_password_hash(admin_password)
+                    )
+                )
+
+                db.commit()
+                app.logger.info("Initial admin account created.")
+
+            elif existing_admin["role"] != "admin":
+
+                app.logger.warning(
+                    "Admin account not created: username or email already belongs to a voter."
+                )
+
     _create_blueprints(app)
 
     @app.before_request

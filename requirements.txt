@@ -1,3 +1,4 @@
 Flask==3.1.1
 Flask-WTF==1.2.2
+Flask-Limiter
 pytest==8.4.1

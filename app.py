@@ -616,6 +616,96 @@ def create_app(test_config=None):
             chain_valid=valid
         )
 
+    # Member 1: Add Candidate
+    @app.route("/admin/candidates/add", methods=["POST"])
+    @login_required("admin")
+    def add_candidate():
+
+        name = request.form.get("name", "").strip()
+        party = request.form.get("party", "").strip()
+        symbol = request.form.get("symbol", "◈").strip()
+
+        if not name or not party:
+            flash("Candidate name and party are required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        db = get_db()
+
+        db.execute(
+            """
+            INSERT INTO candidates (name, party, symbol, active)
+            VALUES (?, ?, ?, 1)
+            """,
+            (name, party, symbol or "◈")
+        )
+
+        db.commit()
+
+        flash("Candidate added successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+
+    # Member 1: Update Candidate
+    @app.route("/admin/candidates/<int:candidate_id>/update", methods=["POST"])
+    @login_required("admin")
+    def update_candidate(candidate_id):
+
+        name = request.form.get("name", "").strip()
+        party = request.form.get("party", "").strip()
+        symbol = request.form.get("symbol", "◈").strip()
+
+        if not name or not party:
+            flash("Candidate name and party are required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        db = get_db()
+
+        candidate = db.execute(
+            "SELECT id FROM candidates WHERE id=?",
+            (candidate_id,)
+        ).fetchone()
+
+        if candidate is None:
+            abort(404)
+
+        db.execute(
+            """
+            UPDATE candidates
+            SET name=?, party=?, symbol=?
+            WHERE id=?
+            """,
+            (name, party, symbol or "◈", candidate_id)
+        )
+
+        db.commit()
+
+        flash("Candidate updated successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+
+    # Member 1: Deactivate Candidate
+    @app.route("/admin/candidates/<int:candidate_id>/deactivate", methods=["POST"])
+    @login_required("admin")
+    def deactivate_candidate(candidate_id):
+
+        db = get_db()
+
+        candidate = db.execute(
+            "SELECT id FROM candidates WHERE id=? AND active=1",
+            (candidate_id,)
+        ).fetchone()
+
+        if candidate is None:
+            abort(404)
+
+        db.execute(
+            "UPDATE candidates SET active=0 WHERE id=?",
+            (candidate_id,)
+        )
+
+        db.commit()
+
+        flash("Candidate deactivated successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+
     # Member 1: Admin voter eligibility management
     @app.route(
         "/admin/voters/<int:user_id>/eligibility",

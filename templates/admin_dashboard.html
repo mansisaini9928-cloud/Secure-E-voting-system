@@ -39,6 +39,7 @@
     </div>
 </div>
 
+<!-- Election Controls -->
 <div class="panel p-4 mb-4">
     <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
 
@@ -78,15 +79,58 @@
     </div>
 </div>
 
-<!-- Candidates Section -->
+<!-- Candidate Management -->
 <div class="panel p-4 mb-4">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h5 mb-0">Candidates</h2>
-        <span class="text-secondary small">{{ candidates|length }} on ballot</span>
+        <div>
+            <h2 class="h5 mb-1">Candidate Management</h2>
+            <p class="text-secondary mb-0">Add, update, or deactivate election candidates.</p>
+        </div>
+
+        <span class="text-secondary small">{{ candidates|length }} candidates</span>
     </div>
 
+    <!-- Add Candidate Form -->
+    <div class="border rounded p-3 mb-4">
+        <h3 class="h6 mb-3">Add New Candidate</h3>
+
+        <form method="POST" action="{{ url_for('add_candidate') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label">Candidate Name</label>
+                    <input type="text" name="name" class="form-control"
+                           placeholder="Enter candidate name" required>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Party</label>
+                    <input type="text" name="party" class="form-control"
+                           placeholder="Enter party name" required>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Symbol</label>
+                    <input type="text" name="symbol" class="form-control"
+                           placeholder="◈" value="◈">
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100">
+                        Add Candidate
+                    </button>
+                </div>
+
+            </div>
+        </form>
+    </div>
+
+    <!-- Candidate List -->
     {% if candidates %}
+
     <div class="table-responsive">
         <table class="table table-dark table-hover align-middle">
 
@@ -94,26 +138,94 @@
                 <tr>
                     <th>Candidate</th>
                     <th>Party</th>
-                    <th>Aggregate tally</th>
+                    <th>Status</th>
+                    <th>Aggregate Tally</th>
+                    <th>Update Candidate</th>
+                    <th>Action</th>
                 </tr>
             </thead>
 
             <tbody>
+
                 {% for c in candidates %}
+
                 <tr>
                     <td>{{ c['symbol'] }} &nbsp; {{ c['name'] }}</td>
+
                     <td>{{ c['party'] }}</td>
+
+                    <td>
+                        {% if c['active'] == 1 %}
+                            <span class="badge text-bg-success">Active</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+
                     <td>
                         {{ c['votes'] if stats.status=='closed' and chain_valid else '—' }}
                     </td>
-                </tr>
-                {% endfor %}
-            </tbody>
 
+                    <td>
+                        {% if c['active'] == 1 %}
+
+                        <form method="POST"
+                              action="{{ url_for('update_candidate', candidate_id=c['id']) }}">
+
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                            <input type="text" name="name" class="form-control form-control-sm mb-1"
+                                   value="{{ c['name'] }}" required>
+
+                            <input type="text" name="party" class="form-control form-control-sm mb-1"
+                                   value="{{ c['party'] }}" required>
+
+                            <input type="text" name="symbol" class="form-control form-control-sm mb-1"
+                                   value="{{ c['symbol'] }}">
+
+                            <button type="submit" class="btn btn-sm btn-outline-info">
+                                Update
+                            </button>
+
+                        </form>
+
+                        {% else %}
+                            <span class="text-secondary small">Inactive candidate</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if c['active'] == 1 %}
+
+                        <form method="POST"
+                              action="{{ url_for('deactivate_candidate', candidate_id=c['id']) }}">
+
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirm('Are you sure you want to deactivate this candidate?')">
+                                Deactivate
+                            </button>
+
+                        </form>
+
+                        {% else %}
+                            <span class="text-secondary small">Deactivated</span>
+                        {% endif %}
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
         </table>
     </div>
+
     {% else %}
+
     <div class="empty-inline">No candidates have been added yet.</div>
+
     {% endif %}
 
 </div>
@@ -150,6 +262,7 @@
             </thead>
 
             <tbody>
+
                 {% for voter in voters %}
 
                 <tr>
@@ -206,8 +319,8 @@
                 </tr>
 
                 {% endfor %}
-            </tbody>
 
+            </tbody>
         </table>
     </div>
 

@@ -1,7 +1,4 @@
-numpy>=1.26
-pandas>=2.1
-scikit-learn>=1.4
-joblib>=1.3
-matplotlib>=3.8
-Flask>=3.0
-pytest>=8.0
+Flask==3.1.1
+Flask-WTF==1.2.2
+Flask-Limiter
+pytest==8.4.1

@@ -1,0 +1,42 @@
+{
+  "dataset_note": "Synthetic simulated data only; results do not predict real election activity.",
+  "test_rows": 2000,
+  "test_class_counts": {
+    "0": 1900,
+    "1": 100
+  },
+  "models": {
+    "isolation_forest": {
+      "precision": 0.358974358974359,
+      "recall": 0.56,
+      "f1_score": 0.4375,
+      "roc_auc": 0.8825894736842106,
+      "confusion_matrix_labels_0_then_1": [
+        [
+          1800,
+          100
+        ],
+        [
+          44,
+          56
+        ]
+      ]
+    },
+    "random_forest": {
+      "precision": 0.927710843373494,
+      "recall": 0.77,
+      "f1_score": 0.8415300546448088,
+      "roc_auc": 0.9308947368421052,
+      "confusion_matrix_labels_0_then_1": [
+        [
+          1894,
+          6
+        ],
+        [
+          23,
+          77
+        ]
+      ]
+    }
+  }
+}

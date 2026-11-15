@@ -18,6 +18,12 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
 from database.db import get_db, init_app as init_db_app, init_db
+from members.member3_ml import (
+    after_application_request as member3_after_request,
+    before_application_request as member3_before_request,
+    init_app as init_member3_app,
+    mark_login_outcome as mark_member3_login_outcome,
+)
 
 csrf = CSRFProtect()
 
@@ -88,6 +94,10 @@ def _create_blueprints(app):
     app.register_blueprint(member1_bp, url_prefix="/member1")
     app.register_blueprint(member2_bp, url_prefix="/member2")
     app.register_blueprint(member3_bp, url_prefix="/member3")
+    for endpoint in ("member3_ml.alerts", "member3_ml.summary"):
+        app.view_functions[endpoint] = app.login_required("admin")(
+            app.view_functions[endpoint]
+        )
 
 
 def create_app(test_config=None):
@@ -149,8 +159,6 @@ def create_app(test_config=None):
                     "Admin account not created: username or email already belongs to a voter."
                 )
 
-    _create_blueprints(app)
-
     @app.before_request
     def load_user():
 
@@ -198,6 +206,17 @@ def create_app(test_config=None):
         return decorator
 
     app.login_required = login_required
+
+    _create_blueprints(app)
+    init_member3_app(app)
+
+    @app.before_request
+    def capture_member3_activity():
+        member3_before_request()
+
+    @app.after_request
+    def score_member3_activity(response):
+        return member3_after_request(response)
 
     @app.route("/")
     def home():
@@ -272,6 +291,8 @@ def create_app(test_config=None):
 
                     if locked_until > _now():
 
+                        mark_member3_login_outcome("failure")
+
                         _log_activity(
                             db,
                             "login_locked",
@@ -287,6 +308,8 @@ def create_app(test_config=None):
                         return render_template("login.html")
 
                 if check_password_hash(user["password_hash"], password):
+
+                    mark_member3_login_outcome("success")
 
                     db.execute(
                         "UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=?",
@@ -310,6 +333,8 @@ def create_app(test_config=None):
                     )
 
                 else:
+
+                    mark_member3_login_outcome("failure")
 
                     attempts = user["failed_login_attempts"] + 1
 
@@ -351,6 +376,8 @@ def create_app(test_config=None):
                     )
 
             else:
+
+                mark_member3_login_outcome("failure")
 
                 _log_activity(
                     db,

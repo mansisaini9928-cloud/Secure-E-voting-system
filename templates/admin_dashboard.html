@@ -16,27 +16,44 @@
     </span>
 </div>
 
+<!-- Registration Statistics -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
+
+    <div class="col-6 col-lg">
         <div class="stat-card">
             <small>REGISTERED VOTERS</small>
             <strong>{{ stats.voters }}</strong>
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-6 col-lg">
+        <div class="stat-card">
+            <small>APPROVED VOTERS</small>
+            <strong>{{ stats.approved }}</strong>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg">
+        <div class="stat-card">
+            <small>PENDING VOTERS</small>
+            <strong>{{ stats.pending }}</strong>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg">
         <div class="stat-card">
             <small>BALLOTS RECEIVED</small>
             <strong>{{ stats.votes }}</strong>
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-6 col-lg">
         <div class="stat-card">
             <small>CHAIN STATUS</small>
             <strong class="fs-4">{{ 'Verified' if chain_valid else 'Alert' }}</strong>
         </div>
     </div>
+
 </div>
 
 <!-- Election Controls -->

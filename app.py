@@ -1,4 +1,3 @@
-
 import hashlib
 import secrets
 import uuid
@@ -11,7 +10,7 @@ from flask_limiter.util import get_remote_address
 
 from flask import (
     Flask, abort, current_app, flash, jsonify, redirect, render_template,
-    request, session, url_for
+    request, session, url_for, g
 )
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -30,7 +29,7 @@ def _hash(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-# Member 1: Activity logging function
+# Member 1: Activity logging
 def _log_activity(db, kind, severity, message, score=0, simulated=0):
 
     session_cookie = request.cookies.get(
@@ -59,6 +58,7 @@ def _log_activity(db, kind, severity, message, score=0, simulated=0):
 
 
 def _chain_state(db):
+
     previous = "0" * 64
     valid_ids = []
 
@@ -67,7 +67,10 @@ def _chain_state(db):
     ).fetchall()
 
     for row in rows:
-        expected = _hash(f"{previous}:{row['id']}:{row['ballot_hash']}")
+
+        expected = _hash(
+            f"{previous}:{row['id']}:{row['ballot_hash']}"
+        )
 
         if row["previous_hash"] != previous or row["chain_hash"] != expected:
             return False, valid_ids
@@ -79,7 +82,6 @@ def _chain_state(db):
 
 
 def _create_blueprints(app):
-    """Member integration points."""
 
     from members.member1_auth import bp as member1_bp
     from members.member2_crypto import bp as member2_bp
@@ -159,16 +161,17 @@ def create_app(test_config=None):
 
         uid = session.get("user_id")
 
-        session_user = gdb.execute(
-            "SELECT id,username,role,has_voted,eligible FROM users WHERE id=?",
+        g.user = gdb.execute(
+            """
+            SELECT id,username,role,has_voted,eligible
+            FROM users WHERE id=?
+            """,
             (uid,)
         ).fetchone() if uid else None
 
-        from flask import g
-        g.user = session_user
-
     @app.context_processor
     def inject_globals():
+
         return {
             "election_status": get_db().execute(
                 "SELECT status FROM election WHERE id=1"
@@ -182,11 +185,13 @@ def create_app(test_config=None):
             @wraps(view)
             def wrapped(*args, **kwargs):
 
-                from flask import g
-
                 if g.user is None:
+
                     flash("Please sign in to continue.", "warning")
-                    return redirect(url_for("login", next=request.path))
+
+                    return redirect(
+                        url_for("login", next=request.path)
+                    )
 
                 if role and g.user["role"] != role:
                     abort(403)
@@ -203,6 +208,7 @@ def create_app(test_config=None):
     def home():
         return render_template("home.html")
 
+    # Voter Registration
     @app.route("/register", methods=["GET", "POST"])
     def register():
 
@@ -226,13 +232,23 @@ def create_app(test_config=None):
                     db = get_db()
 
                     db.execute(
-                        "INSERT INTO users(username,email,password_hash) VALUES(?,?,?)",
-                        (username, email, generate_password_hash(password))
+                        """
+                        INSERT INTO users(username,email,password_hash)
+                        VALUES(?,?,?)
+                        """,
+                        (
+                            username,
+                            email,
+                            generate_password_hash(password)
+                        )
                     )
 
                     db.commit()
 
-                    flash("Account created. You can now sign in.", "success")
+                    flash(
+                        "Account created. You can now sign in.",
+                        "success"
+                    )
 
                     return redirect(url_for("login"))
 
@@ -268,7 +284,9 @@ def create_app(test_config=None):
 
                 if user["locked_until"]:
 
-                    locked_until = datetime.fromisoformat(user["locked_until"])
+                    locked_until = datetime.fromisoformat(
+                        user["locked_until"]
+                    )
 
                     if locked_until > _now():
 
@@ -289,7 +307,11 @@ def create_app(test_config=None):
                 if check_password_hash(user["password_hash"], password):
 
                     db.execute(
-                        "UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=?",
+                        """
+                        UPDATE users
+                        SET failed_login_attempts=0, locked_until=NULL
+                        WHERE id=?
+                        """,
                         (user["id"],)
                     )
 
@@ -320,7 +342,11 @@ def create_app(test_config=None):
                         ).isoformat()
 
                         db.execute(
-                            "UPDATE users SET failed_login_attempts=0, locked_until=? WHERE id=?",
+                            """
+                            UPDATE users
+                            SET failed_login_attempts=0, locked_until=?
+                            WHERE id=?
+                            """,
                             (locked_until, user["id"])
                         )
 
@@ -332,7 +358,11 @@ def create_app(test_config=None):
                     else:
 
                         db.execute(
-                            "UPDATE users SET failed_login_attempts=? WHERE id=?",
+                            """
+                            UPDATE users
+                            SET failed_login_attempts=?
+                            WHERE id=?
+                            """,
                             (attempts, user["id"])
                         )
 
@@ -381,16 +411,15 @@ def create_app(test_config=None):
 
         return render_template(
             "voter_dashboard.html",
-            user=__import__("flask").g.user
+            user=g.user
         )
 
+    # Voting Page
     @app.route("/vote", methods=["GET", "POST"])
     @login_required("voter")
     def vote_page():
 
         db = get_db()
-
-        from flask import g
 
         if not g.user["eligible"]:
 
@@ -402,7 +431,12 @@ def create_app(test_config=None):
             return redirect(url_for("voter_dashboard"))
 
         candidates = db.execute(
-            "SELECT id,name,party,symbol FROM candidates WHERE active=1 ORDER BY id"
+            """
+            SELECT id,name,party,symbol
+            FROM candidates
+            WHERE active=1
+            ORDER BY id
+            """
         ).fetchall()
 
         token = session.get("vote_token")
@@ -431,7 +465,11 @@ def create_app(test_config=None):
                 ).isoformat()
 
                 db.execute(
-                    "INSERT OR REPLACE INTO vote_tokens(token_hash,user_id,expires_at,consumed) VALUES(?,?,?,0)",
+                    """
+                    INSERT OR REPLACE INTO vote_tokens
+                    (token_hash,user_id,expires_at,consumed)
+                    VALUES (?,?,?,0)
+                    """,
                     (_hash(raw), g.user["id"], expiry)
                 )
 
@@ -459,18 +497,19 @@ def create_app(test_config=None):
             token_ready=bool(token)
         )
 
+    # API: Request Voting Token
     @app.post("/api/vote/token")
     @login_required("voter")
     def request_vote_token():
 
         db = get_db()
 
-        from flask import g
-
         user_id = g.user["id"]
 
         if not g.user["eligible"]:
-            return jsonify(error="Your account is not approved for voting."), 403
+            return jsonify(
+                error="Your account is not approved for voting."
+            ), 403
 
         if db.execute(
             "SELECT status FROM election WHERE id=1"
@@ -487,7 +526,11 @@ def create_app(test_config=None):
         token = secrets.token_urlsafe(32)
 
         db.execute(
-            "INSERT OR REPLACE INTO vote_tokens(token_hash,user_id,expires_at,consumed) VALUES(?,?,?,0)",
+            """
+            INSERT OR REPLACE INTO vote_tokens
+            (token_hash,user_id,expires_at,consumed)
+            VALUES (?,?,?,0)
+            """,
             (
                 _hash(token),
                 user_id,
@@ -508,13 +551,12 @@ def create_app(test_config=None):
 
         return jsonify(token=token, expires_in=600)
 
+    # Cast Vote
     @app.post("/api/vote/cast")
     @login_required("voter")
     def cast_vote():
 
         db = get_db()
-
-        from flask import g
 
         user_id = g.user["id"]
 
@@ -522,7 +564,9 @@ def create_app(test_config=None):
         token = request.form.get("token", "")
 
         if not g.user["eligible"]:
-            return jsonify(error="Your account is not approved for voting."), 403
+            return jsonify(
+                error="Your account is not approved for voting."
+            ), 403
 
         if db.execute(
             "SELECT status FROM election WHERE id=1"
@@ -531,16 +575,26 @@ def create_app(test_config=None):
             return jsonify(error="Voting is closed."), 409
 
         candidate = db.execute(
-            "SELECT id FROM candidates WHERE id=? AND active=1",
+            """
+            SELECT id FROM candidates
+            WHERE id=? AND active=1
+            """,
             (candidate_id,)
         ).fetchone()
 
         token_row = db.execute(
-            "SELECT * FROM vote_tokens WHERE token_hash=? AND user_id=? AND consumed=0",
+            """
+            SELECT * FROM vote_tokens
+            WHERE token_hash=? AND user_id=? AND consumed=0
+            """,
             (_hash(token), user_id)
         ).fetchone()
 
-        if not candidate or not token_row or token_row["expires_at"] < _now().isoformat():
+        if (
+            not candidate
+            or not token_row
+            or token_row["expires_at"] < _now().isoformat()
+        ):
 
             return jsonify(
                 error="The candidate selection or voting token is invalid or expired."
@@ -573,22 +627,38 @@ def create_app(test_config=None):
             db.execute("BEGIN IMMEDIATE")
 
             db.execute(
-                "INSERT INTO ballots(id,ballot_hash,previous_hash,chain_hash) VALUES(?,?,?,?)",
+                """
+                INSERT INTO ballots
+                (id,ballot_hash,previous_hash,chain_hash)
+                VALUES (?,?,?,?)
+                """,
                 (ballot_id, ballot_hash, previous, chain_hash)
             )
 
             db.execute(
-                "INSERT OR IGNORE INTO tally_counts(candidate_id,vote_count) VALUES(?,0)",
+                """
+                INSERT OR IGNORE INTO tally_counts
+                (candidate_id,vote_count)
+                VALUES (?,0)
+                """,
                 (candidate_id,)
             )
 
             db.execute(
-                "UPDATE tally_counts SET vote_count=vote_count+1 WHERE candidate_id=?",
+                """
+                UPDATE tally_counts
+                SET vote_count=vote_count+1
+                WHERE candidate_id=?
+                """,
                 (candidate_id,)
             )
 
             db.execute(
-                "UPDATE users SET has_voted=1 WHERE id=? AND has_voted=0",
+                """
+                UPDATE users
+                SET has_voted=1
+                WHERE id=? AND has_voted=0
+                """,
                 (user_id,)
             )
 
@@ -601,7 +671,11 @@ def create_app(test_config=None):
                 ), 409
 
             db.execute(
-                "UPDATE vote_tokens SET consumed=1 WHERE token_hash=?",
+                """
+                UPDATE vote_tokens
+                SET consumed=1
+                WHERE token_hash=? AND consumed=0
+                """,
                 (_hash(token),)
             )
 
@@ -632,15 +706,38 @@ def create_app(test_config=None):
 
         return render_template("receipt.html", receipt=receipt)
 
+    # Admin Dashboard
     @app.route("/admin")
     @login_required("admin")
     def admin_dashboard():
 
         db = get_db()
 
+        # Registration Statistics
         stats = {
+
             "voters": db.execute(
-                "SELECT COUNT(*) FROM users WHERE role='voter'"
+                """
+                SELECT COUNT(*)
+                FROM users
+                WHERE role='voter'
+                """
+            ).fetchone()[0],
+
+            "approved": db.execute(
+                """
+                SELECT COUNT(*)
+                FROM users
+                WHERE role='voter' AND eligible=1
+                """
+            ).fetchone()[0],
+
+            "pending": db.execute(
+                """
+                SELECT COUNT(*)
+                FROM users
+                WHERE role='voter' AND eligible=0
+                """
             ).fetchone()[0],
 
             "votes": db.execute(
@@ -690,7 +787,12 @@ def create_app(test_config=None):
         symbol = request.form.get("symbol", "◈").strip()
 
         if not name or not party:
-            flash("Candidate name and party are required.", "danger")
+
+            flash(
+                "Candidate name and party are required.",
+                "danger"
+            )
+
             return redirect(url_for("admin_dashboard"))
 
         db = get_db()
@@ -706,10 +808,14 @@ def create_app(test_config=None):
         db.commit()
 
         flash("Candidate added successfully.", "success")
+
         return redirect(url_for("admin_dashboard"))
 
     # Member 1: Update Candidate
-    @app.route("/admin/candidates/<int:candidate_id>/update", methods=["POST"])
+    @app.route(
+        "/admin/candidates/<int:candidate_id>/update",
+        methods=["POST"]
+    )
     @login_required("admin")
     def update_candidate(candidate_id):
 
@@ -718,7 +824,12 @@ def create_app(test_config=None):
         symbol = request.form.get("symbol", "◈").strip()
 
         if not name or not party:
-            flash("Candidate name and party are required.", "danger")
+
+            flash(
+                "Candidate name and party are required.",
+                "danger"
+            )
+
             return redirect(url_for("admin_dashboard"))
 
         db = get_db()
@@ -743,10 +854,14 @@ def create_app(test_config=None):
         db.commit()
 
         flash("Candidate updated successfully.", "success")
+
         return redirect(url_for("admin_dashboard"))
 
     # Member 1: Deactivate Candidate
-    @app.route("/admin/candidates/<int:candidate_id>/deactivate", methods=["POST"])
+    @app.route(
+        "/admin/candidates/<int:candidate_id>/deactivate",
+        methods=["POST"]
+    )
     @login_required("admin")
     def deactivate_candidate(candidate_id):
 
@@ -768,9 +883,10 @@ def create_app(test_config=None):
         db.commit()
 
         flash("Candidate deactivated successfully.", "success")
+
         return redirect(url_for("admin_dashboard"))
 
-    # Member 1: Admin voter eligibility management
+    # Member 1: Voter Eligibility
     @app.route(
         "/admin/voters/<int:user_id>/eligibility",
         methods=["POST"]
@@ -781,7 +897,10 @@ def create_app(test_config=None):
         db = get_db()
 
         voter = db.execute(
-            "SELECT id FROM users WHERE id=? AND role='voter'",
+            """
+            SELECT id FROM users
+            WHERE id=? AND role='voter'
+            """,
             (user_id,)
         ).fetchone()
 
@@ -816,7 +935,11 @@ def create_app(test_config=None):
         db = get_db()
 
         db.execute(
-            "UPDATE election SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1",
+            """
+            UPDATE election
+            SET status=?,updated_at=CURRENT_TIMESTAMP
+            WHERE id=1
+            """,
             (action,)
         )
 
@@ -874,6 +997,7 @@ def create_app(test_config=None):
 
         return redirect(url_for("admin_dashboard"))
 
+    # Security Dashboard
     @app.route("/security")
     @login_required("admin")
     def security_dashboard():
@@ -881,19 +1005,31 @@ def create_app(test_config=None):
         db = get_db()
 
         events = db.execute(
-            "SELECT * FROM security_events ORDER BY id DESC LIMIT 100"
+            """
+            SELECT * FROM security_events
+            ORDER BY id DESC LIMIT 100
+            """
         ).fetchall()
 
         normal = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE severity='low'"
+            """
+            SELECT COUNT(*) FROM security_events
+            WHERE severity='low'
+            """
         ).fetchone()[0]
 
         suspicious = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE severity IN ('medium','high','critical')"
+            """
+            SELECT COUNT(*) FROM security_events
+            WHERE severity IN ('medium','high','critical')
+            """
         ).fetchone()[0]
 
         chart = db.execute(
-            "SELECT id,score FROM security_events ORDER BY id DESC LIMIT 20"
+            """
+            SELECT id,score FROM security_events
+            ORDER BY id DESC LIMIT 20
+            """
         ).fetchall()[::-1]
 
         return render_template(
@@ -924,6 +1060,7 @@ def create_app(test_config=None):
 
         return redirect(url_for("security_dashboard"))
 
+    # Election Results
     @app.route("/results")
     @login_required("admin")
     def results():
@@ -940,12 +1077,12 @@ def create_app(test_config=None):
             and valid
         )
 
+        # Historical votes are also included for deactivated candidates.
         rows = db.execute(
             """
             SELECT c.name,c.party,COALESCE(t.vote_count,0) votes
             FROM candidates c
             LEFT JOIN tally_counts t ON t.candidate_id=c.id
-            WHERE c.active=1
             ORDER BY c.id
             """
         ).fetchall() if released else []

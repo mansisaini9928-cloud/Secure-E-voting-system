@@ -10,7 +10,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from flask import (
-    Flask, abort, flash, jsonify, redirect, render_template,
+    Flask, abort, current_app, flash, jsonify, redirect, render_template,
     request, session, url_for
 )
 from flask_wtf.csrf import CSRFProtect
@@ -28,6 +28,34 @@ def _now():
 
 def _hash(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+# Member 1: Activity logging function
+def _log_activity(db, kind, severity, message, score=0, simulated=0):
+
+    session_cookie = request.cookies.get(
+        current_app.config.get("SESSION_COOKIE_NAME", "session"), ""
+    )
+
+    session_hash = _hash(session_cookie) if session_cookie else "none"
+
+    ip_address = request.remote_addr or "unknown"
+    ip_hash = _hash(ip_address)
+
+    safe_message = (
+        f"{message} | session_hash={session_hash} | ip_hash={ip_hash}"
+    )
+
+    db.execute(
+        """
+        INSERT INTO security_events
+        (kind, severity, message, score, simulated)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (kind, severity, safe_message, score, simulated)
+    )
+
+    db.commit()
 
 
 def _chain_state(db):
@@ -219,6 +247,7 @@ def create_app(test_config=None):
 
         return render_template("register.html")
 
+    # Login
     @app.route("/login", methods=["GET", "POST"])
     @limiter.limit("10 per minute")
     def login():
@@ -242,6 +271,13 @@ def create_app(test_config=None):
                     locked_until = datetime.fromisoformat(user["locked_until"])
 
                     if locked_until > _now():
+
+                        _log_activity(
+                            db,
+                            "login_locked",
+                            "high",
+                            "Login attempted while account was locked"
+                        )
 
                         flash(
                             "Account locked. Please try again later.",
@@ -307,7 +343,21 @@ def create_app(test_config=None):
 
                     db.commit()
 
+                    _log_activity(
+                        db,
+                        "login_failed",
+                        "medium",
+                        "Login failed: incorrect password"
+                    )
+
             else:
+
+                _log_activity(
+                    db,
+                    "login_failed",
+                    "medium",
+                    "Login failed: account not found"
+                )
 
                 flash(
                     "Sign in failed. Check your credentials and try again.",
@@ -390,6 +440,13 @@ def create_app(test_config=None):
                 session["vote_token"] = raw
                 token = raw
 
+                _log_activity(
+                    db,
+                    "token_requested",
+                    "low",
+                    "Voter requested a voting token"
+                )
+
                 flash(
                     "A short-lived voting token is ready.",
                     "success"
@@ -441,6 +498,13 @@ def create_app(test_config=None):
         db.commit()
 
         session["vote_token"] = token
+
+        _log_activity(
+            db,
+            "token_requested",
+            "low",
+            "Voter requested a voting token through API"
+        )
 
         return jsonify(token=token, expires_in=600)
 

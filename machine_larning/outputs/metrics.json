@@ -1,0 +1,57 @@
+{
+  "data_source": "SIMULATED",
+  "test_rows": 3000,
+  "test_attack_share": 0.05,
+  "majority_class_baseline_accuracy": 0.95,
+  "contamination": 0.03,
+  "thresholds": {
+    "medium": 0.5456556234104974,
+    "high": 0.5756556234104975
+  },
+  "isolation_forest": {
+    "precision": 0.7032967032967034,
+    "recall": 0.8533333333333334,
+    "f1": 0.7710843373493976,
+    "roc_auc": 0.9871836257309942,
+    "accuracy": 0.9746666666666667,
+    "confusion_matrix": [
+      [
+        2796,
+        54
+      ],
+      [
+        22,
+        128
+      ]
+    ],
+    "recall_by_attack_type": {
+      "brute_force": 0.7878787878787878,
+      "token_replay": 0.8055555555555556,
+      "bot_traffic": 0.8,
+      "credential_stuffing": 1.0
+    }
+  },
+  "random_forest": {
+    "precision": 0.958041958041958,
+    "recall": 0.9133333333333333,
+    "f1": 0.9351535836177475,
+    "roc_auc": 0.9982643274853801,
+    "accuracy": 0.9936666666666667,
+    "confusion_matrix": [
+      [
+        2844,
+        6
+      ],
+      [
+        13,
+        137
+      ]
+    ],
+    "recall_by_attack_type": {
+      "brute_force": 0.7575757575757576,
+      "token_replay": 0.9722222222222222,
+      "bot_traffic": 0.9,
+      "credential_stuffing": 1.0
+    }
+  }
+}

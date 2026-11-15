@@ -14,7 +14,7 @@ def app(tmp_path):
     with app.app_context():
         db = get_db()
         db.execute("INSERT INTO candidates(name,party,symbol) VALUES('Test Candidate','Demo','T')")
-        db.execute("INSERT INTO users(username,email,password_hash) VALUES('voter','voter@test.local',?)", (generate_password_hash("LongDemoPass!123"),))
+        db.execute("INSERT INTO users(username,email,password_hash,eligible) VALUES('voter','voter@test.local',?,1)", (generate_password_hash("LongDemoPass!123"),))
         db.execute("INSERT INTO users(username,email,password_hash,role) VALUES('admin','admin@test.local',?,'admin')", (generate_password_hash("LongDemoPass!123"),))
         db.execute("INSERT INTO security_events(kind,severity,message,score,simulated) VALUES('test','high','Suspicious test signal',0.91,1)")
         db.commit()

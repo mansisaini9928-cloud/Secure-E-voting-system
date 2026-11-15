@@ -557,6 +557,12 @@ def create_app(test_config=None):
 
             return jsonify(error="Voting is closed."), 409
 
+        if g.user["has_voted"]:
+
+            return jsonify(
+                error="A ballot has already been submitted."
+            ), 409
+
         candidate = db.execute(
             "SELECT id FROM candidates WHERE id=? AND active=1",
             (candidate_id,)
@@ -572,12 +578,6 @@ def create_app(test_config=None):
             return jsonify(
                 error="The candidate selection or voting token is invalid or expired."
             ), 400
-
-        if g.user["has_voted"]:
-
-            return jsonify(
-                error="A ballot has already been submitted."
-            ), 409
 
         ballot_id = str(uuid.uuid4())
 
@@ -840,16 +840,17 @@ def create_app(test_config=None):
         if action not in ("open", "close"):
             abort(404)
 
+        status = "closed" if action == "close" else "open"
         db = get_db()
 
         db.execute(
             "UPDATE election SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1",
-            (action,)
+            (status,)
         )
 
         db.commit()
 
-        flash(f"Election {action}ed.", "success")
+        flash(f"Election {status}.", "success")
 
         return redirect(url_for("admin_dashboard"))
 
